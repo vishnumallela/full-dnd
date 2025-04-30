@@ -1,103 +1,214 @@
-import Image from "next/image";
+"use client";
+import React from 'react';
+import { DragOverlay, DragStartEvent } from '@dnd-kit/core';
+import { 
+  arrayMove,
+} from '@dnd-kit/sortable';
+import Draggable from '../components/dnd-draggable';
+import Droppable from '../components/dnd-droppable';
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import DndProvider from '@/components/dnd-provider';
 
-export default function Home() {
+// Sample chart component
+const Chart = ({ title, data }: { title: string; data: number }) => {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <Card className="w-full mb-4">
+      <CardHeader>
+        <CardTitle className="text-lg">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        Sample Chart Value: {data}
+      </CardContent>
+    </Card>
+  );
+};
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+// Sample data
+const initialSections = [
+  {
+    id: 'section1',
+    title: 'Analytics',
+    charts: [
+      { id: 'chart1', title: 'Revenue', data: 5000 },
+      { id: 'chart2', title: 'Users', data: 1200 },
+    ]
+  },
+  {
+    id: 'section2',
+    title: 'Performance',
+    charts: [
+      { id: 'chart3', title: 'Load Time', data: 1.5 },
+      { id: 'chart4', title: 'Error Rate', data: 0.02 },
+    ]
+  },
+  {
+    id: 'section3',
+    title: 'Marketing',
+    charts: [
+      { id: 'chart5', title: 'Conversion', data: 15 },
+      { id: 'chart6', title: 'Engagement', data: 75 },
+    ]
+  }
+];
+
+export default function DashboardPage() {
+  const [sections, setSections] = useState(initialSections);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeChart, setActiveChart] = useState<{title: string; data: number} | null>(null);
+
+  // Handle drag start for showing overlay
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = event.active.id as string;
+    setActiveId(id);
+    
+    // Find the chart being dragged to show in overlay
+    for (const section of sections) {
+      const chart = section.charts.find(chart => chart.id === id);
+      if (chart) {
+        setActiveChart({title: chart.title, data: chart.data});
+        break;
+      }
+    }
+  };
+
+  // Handle sorting within the same section
+  const handleSortWithinContainer = (
+    activeId: string, 
+    overId: string, 
+    containerId: string
+  ) => {
+    // Find the section by containerId
+    const sectionIndex = sections.findIndex(section => section.id === containerId);
+    if (sectionIndex === -1) return;
+    
+    const activeSection = sections[sectionIndex];
+    const activeChartIndex = activeSection.charts.findIndex(chart => chart.id === activeId);
+    const overChartIndex = activeSection.charts.findIndex(chart => chart.id === overId);
+    
+    // Only reorder if dropping on a different item
+    if (activeChartIndex !== overChartIndex && activeChartIndex !== -1 && overChartIndex !== -1) {
+      const newCharts = arrayMove(
+        activeSection.charts,
+        activeChartIndex,
+        overChartIndex
+      );
+      
+      const newSections = [...sections];
+      newSections[sectionIndex] = {
+        ...activeSection,
+        charts: newCharts
+      };
+      
+      setSections(newSections);
+      console.log("Sorted within container:", activeSection.title);
+    }
+  };
+
+  // Handle moving between different sections
+  const handleMoveBetweenContainers = (
+    activeId: string, 
+    overId: string, 
+    fromContainerId: string, 
+    toContainerId: string
+  ) => {
+    // Find the section indexes
+    const fromSectionIndex = sections.findIndex(section => section.id === fromContainerId);
+    const toSectionIndex = sections.findIndex(section => section.id === toContainerId);
+    
+    if (fromSectionIndex === -1 || toSectionIndex === -1) return;
+    
+    // Get the active section and chart
+    const activeSection = sections[fromSectionIndex];
+    const activeChart = activeSection.charts.find(chart => chart.id === activeId);
+    
+    if (!activeChart) return;
+    
+    const newSections = [...sections];
+    
+    // Remove from old section
+    newSections[fromSectionIndex] = {
+      ...activeSection,
+      charts: activeSection.charts.filter(chart => chart.id !== activeId)
+    };
+    
+    // Add to new section
+    const overSection = newSections[toSectionIndex];
+    
+    // If dropping on a chart in the target section, find its position
+    const overChartIndex = overSection.charts.findIndex(chart => chart.id === overId);
+    
+    if (overChartIndex !== -1) {
+      // Insert after the target chart
+      const newOverCharts = [...overSection.charts];
+      newOverCharts.splice(overChartIndex + 1, 0, activeChart);
+      
+      newSections[toSectionIndex] = {
+        ...overSection,
+        charts: newOverCharts
+      };
+      
+      console.log(`Moved from ${activeSection.title} to ${overSection.title} after item`);
+    } else {
+      // Add to the end of the target section
+      newSections[toSectionIndex] = {
+        ...overSection,
+        charts: [...overSection.charts, activeChart]
+      };
+      
+      console.log(`Moved from ${activeSection.title} to ${overSection.title}`);
+    }
+    
+    setSections(newSections);
+  };
+
+  // Main drag end handler (used for cleanup)
+  const handleDragEnd = () => {
+    // Just reset the active item state
+    setActiveId(null);
+    setActiveChart(null);
+  };
+
+  return (
+    <DndProvider 
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onSortWithinContainer={handleSortWithinContainer}
+      onMoveBetweenContainers={handleMoveBetweenContainers}
+    >
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+        <div className="flex flex-col gap-4">
+          {sections.map((section) => (
+            <Droppable 
+              key={section.id} 
+              id={section.id}
+              items={section.charts.map(chart => chart.id)}
+            >
+              <Card className="w-full">
+                <CardHeader>
+                  <CardTitle>{section.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {section.charts.map((chart) => (
+                    <Draggable key={chart.id} id={chart.id} containerId={section.id}>
+                      <Chart title={chart.title} data={chart.data} />
+                    </Draggable>
+                  ))}
+                </CardContent>
+              </Card>
+            </Droppable>
+          ))}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        
+        <DragOverlay>
+          {activeId && activeChart ? (
+            <div style={{ opacity: 0.8, width: "100%" }}>
+              <Chart title={activeChart.title} data={activeChart.data} />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </div>
+    </DndProvider>
   );
 }
